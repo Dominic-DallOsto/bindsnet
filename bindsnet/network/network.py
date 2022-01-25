@@ -104,7 +104,7 @@ class Network(torch.nn.Module):
         self.batch_size = batch_size
 
         self.layers = {}
-        self.connections = {}
+        self.connections = []
         self.monitors = {}
 
         self.train(learning)
@@ -140,7 +140,7 @@ class Network(torch.nn.Module):
         :param source: Logical name of the connection's source layer.
         :param target: Logical name of the connection's target layer.
         """
-        self.connections[(source, target)] = connection
+        self.connections.append([source, target, connection])
         self.add_module(source + "_to_" + target, connection)
 
         connection.dt = self.dt
@@ -222,8 +222,8 @@ class Network(torch.nn.Module):
         for c in self.connections:
             if c[1] in layers:
                 # Fetch source and target populations.
-                source = self.connections[c].source
-                target = self.connections[c].target
+                source = c[2].source
+                target = c[2].target
 
                 if not c[1] in inputs:
                     if isinstance(target, CSRMNodes):
@@ -240,9 +240,9 @@ class Network(torch.nn.Module):
 
                 # Add to input: source's spikes multiplied by connection weights.
                 if isinstance(target, CSRMNodes):
-                    inputs[c[1]] += self.connections[c].compute_window(source.s)
+                    inputs[c[1]] += c[2].compute_window(source.s)
                 else:
-                    inputs[c[1]] += self.connections[c].compute(source.s)
+                    inputs[c[1]] += c[2].compute(source.s)
 
         return inputs
 
@@ -371,14 +371,6 @@ class Network(torch.nn.Module):
                     # Get input to this layer (one-step mode).
                     current_inputs.update(self._get_inputs(layers=[l]))
 
-                # Inject voltage to neurons.
-                inject_v = injects_v.get(l, None)
-                if inject_v is not None:
-                    if inject_v.ndimension() == 1:
-                        self.layers[l].v += inject_v
-                    else:
-                        self.layers[l].v += inject_v[t]
-
                 if l in current_inputs:
                     self.layers[l].forward(x=current_inputs[l])
                 else:
@@ -402,8 +394,8 @@ class Network(torch.nn.Module):
 
             # Run synapse updates.
             for c in self.connections:
-                self.connections[c].update(
-                    mask=masks.get(c, None), learning=self.learning, **kwargs
+                c[2].update(
+                    mask=masks.get(tuple(c[0:2]), None), learning=self.learning, **kwargs
                 )
 
             # # Get input to all layers.
@@ -415,7 +407,7 @@ class Network(torch.nn.Module):
 
         # Re-normalize connections.
         for c in self.connections:
-            self.connections[c].normalize()
+            c[2].normalize()
 
     def reset_state_variables(self) -> None:
         # language=rst
@@ -426,7 +418,7 @@ class Network(torch.nn.Module):
             self.layers[layer].reset_state_variables()
 
         for connection in self.connections:
-            self.connections[connection].reset_state_variables()
+            connection[2].reset_state_variables()
 
         for monitor in self.monitors:
             self.monitors[monitor].reset_state_variables()
