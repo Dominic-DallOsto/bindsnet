@@ -107,7 +107,9 @@ def plot_spikes(
             n_neurons[key] = (0, val.shape[1])
 
     if ims is None:
-        fig, axes = plt.subplots(n_subplots, 1, figsize=figsize)
+        if axes is None:
+            # Make it so bindsnet will plot on top of an existing plot
+            fig, axes = plt.subplots(n_subplots, 1, figsize=figsize)
         if n_subplots == 1:
             axes = [axes]
 
